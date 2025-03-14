@@ -3,7 +3,7 @@ import { ScrollView, View, Text, Image, TouchableOpacity, TextInput,Dimensions,P
 import QrIcon from '../../assets/images/qrIcon';
 import BellIcon from '../../assets/images/bellIcon';
 import MicIcon from '../../assets/images/micIcon';
-import RNPickerSelect from 'react-native-picker-select';
+// import RNPickerSelect from 'react-native-picker-select';
 import SearchIcon from '../../assets/images/searchIcon';
 import OptionsIcon from '../../assets/images/optionsIcon';
 import DoctorIcon from '../../assets/images/doctorIcon';
@@ -123,6 +123,7 @@ export default function MedicalRecordsScreen() {
   const [showFilter, setShowFilter] = useState(false);
   const [currentKey, setCurrentkey] = useState(false);
   const [currentVal, setCurrentVal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   
 
@@ -134,22 +135,25 @@ export default function MedicalRecordsScreen() {
   
 
   useEffect(()=>{
-    const fetchRecords = async ()=>{
-      await axios.get('http://192.168.0.109:3000/records').then((response)=>{
-        // console.log(response.data);
+    const fetchRecords = async () => {
+      setIsLoading(true);
+      try {
+        const response = await axios.get('https://arogyaid-take-home.onrender.com/records');
         const processedRecords = processRecords(response.data);
-        // console.log(processedRecords.processedRecords[0].subRecords[0].thumbnail)
         setRecords(processedRecords.processedRecords);
         setFilteredRecords(processedRecords.processedRecords);
         setDoctors(processedRecords.uniqueDoctors);
         setRecordTypes(processedRecords.uniqueTypes);
         setDiseases(processedRecords.uniqueDiseases);
-
-      }).catch((error)=>{
-          console.error(error);
-      })
-    }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
     fetchRecords();
+
   },[])
 
   const updateFilters = (key,value) =>{
@@ -162,13 +166,14 @@ export default function MedicalRecordsScreen() {
     else {
       setSelectedRecordType(value);
     }
-    applyFilters();
+    applyFilters(key,value);
     // setShowFilter(false);
     
 
   }
 
-  const applyFilters = () => {
+  const applyFilters = (key,value) => {
+    
     setFilteredRecords(() => {
       const updatedRecords = records.map((item) => {
         const filteredSubRecords = item.subRecords.filter((subItem) => {
@@ -204,7 +209,7 @@ export default function MedicalRecordsScreen() {
   
 
   const renderDropdown = () => (
-    <View style={{width:`${screenWidth-60}`,height:`${screenWidth-60}`}} className='z-50 absolute left-8 top-1/4 bg-white border border-gray-300 shadow-2xl shadow-black rounded-2xl p-4'>
+    <View style={{width:`${screenWidth-60}`,height:`${screenWidth-30}`}} className='z-50 absolute left-8 top-1/4 bg-white border border-gray-300 shadow-2xl shadow-black rounded-2xl p-4'>
       <View className='justify-right flex-row justify-between'>
       <Text className='font-bold mb-4 text-2xl text-gray-800'>{currentKey}</Text>
 
@@ -249,7 +254,7 @@ export default function MedicalRecordsScreen() {
     try {
       const fileUri = `${FileSystem.documentDirectory}${recordId}.pdf`;
   
-      const response = await axios.get(`http://192.168.0.109:3000/records/${recordId}/download`, {
+      const response = await axios.get(`https://arogyaid-take-home.onrender.com/records/${recordId}/download`, {
         responseType: 'blob',
       });
   
@@ -311,7 +316,7 @@ export default function MedicalRecordsScreen() {
 
     <View className='my-4 mx-2'>
     <View className="flex-row justify-between  p-1">
-  {Object.entries(dropDownData).map(([key, value]) => (
+  {/* {Object.entries(dropDownData).map(([key, value]) => (
     <TouchableOpacity
       key={key}
       className="rounded-full flex-row items-center border border-black p-4"
@@ -326,7 +331,7 @@ export default function MedicalRecordsScreen() {
       
       <DownwardArrowIcon />
     </TouchableOpacity>
-  ))}
+  ))} */}
   
 </View>
 {
@@ -344,108 +349,112 @@ export default function MedicalRecordsScreen() {
         <Text className="text-2xl font-bold">Records</Text>
       </View>
 
-      <ScrollView className="px-4">
-        {filteredRecords.map((record, index) => (
-          <View key={index} className="mb-6 relative">
-            <View className="absolute left-8 top-8 bg-blue-500 rounded-lg w-1 h-[90%] z-[-50]" />
-
-            <Text className="text-lg p-2 rounded-full border border-black my-2 w-20 text-center z-10 bg-white">
-              {record.year}
-            </Text>
-
-            {record.subRecords.map((item, subindex) => {
-              const Icon = categoryIcons[item.type];
-              const color = categoryColors[item.type]
-              return (
-                <View key={subindex} className="mt-4 rounded-xl">
-                  
-                  
-                  <Text className="text-gray-500 mb-2 bg-white p-2">{item.date}</Text>
-                  <View className="justify-between bg-white shadow-lg shadow-gray-400 rounded-xl  ">
-
-                  <View className='flex-row justify-between'>
-                  <View className='pl-0 pt-3 border-b border-stone-200 ml-4'>
-                  <Text className="text-lg font-semibold mb-1 text-left">{item.title}</Text>
-                  </View>
-                  <View style= {{backgroundColor:`${color}`}} className='rounded-bl-xl rounded-tr-xl flex-row p-2'>
-                      {Icon && <Icon />}
-                      <Text className="text-lg font-semibold mb-1 ml-2">{item.type}</Text>
-                        <TouchableOpacity>
-                        <OptionsIcon/>
-                        </TouchableOpacity>
+      {
+        records.length>0?(<ScrollView className="px-4">
+          {filteredRecords.map((record, index) => (
+            <View key={index} className="mb-6 relative">
+              <View className="absolute left-8 top-8 bg-blue-500 rounded-lg w-1 h-[90%] z-[-50]" />
+  
+              <Text className="text-lg p-2 rounded-full border border-black my-2 w-20 text-center z-10 bg-white">
+                {record.year}
+              </Text>
+  
+              {record.subRecords.map((item, subindex) => {
+                const Icon = categoryIcons[item.type];
+                const color = categoryColors[item.type]
+                return (
+                  <View key={subindex} className="mt-4 rounded-xl">
+                    
+                    
+                    <Text className="text-gray-500 mb-2 bg-white p-2">{item.date}</Text>
+                    <View className="justify-between bg-white shadow-lg shadow-gray-400 rounded-xl  ">
+  
+                    <View className='flex-row justify-between'>
+                    <View className='pl-0 pt-3 border-b border-stone-200 ml-4'>
+                    <Text className="text-lg font-semibold mb-1 text-left">{item.title}</Text>
+                    </View>
+                    <View style= {{backgroundColor:`${color}`}} className='rounded-bl-xl rounded-tr-xl flex-row p-2'>
+                        {Icon && <Icon />}
+                        <Text className="text-lg font-semibold mb-1 ml-2">{item.type}</Text>
+                          <TouchableOpacity>
+                          <OptionsIcon/>
+                          </TouchableOpacity>
+                        </View>
+                    </View>
+  
+                    <View className='flex-row justify-between p-2 pl-0 ml-4'>
+                    
+                    <View className='flex-row '>
+                    <MedicalIcon/>
+                      <Text className='font-light'>Lorem ipsum dolor sit.</Text>
                       </View>
-                  </View>
-
-                  <View className='flex-row justify-between p-2 pl-0 ml-4'>
-                  
-                  <View className='flex-row '>
-                  <MedicalIcon/>
-                    <Text className='font-light'>Lorem ipsum dolor sit.</Text>
+                          
+                          {item.dynamicFields.doctor?(<View className='flex-row'>
+                            <DoctorIcon/>
+                            <Text className='font-light'>{item.dynamicFields.doctor}</Text>
+  
+                          </View>):(<></>)}
+                      
                     </View>
+                      <View className='flex-row p-4 justify-between'>
+                      <View className="flex-1 max-w-[60%]">
                         
-                        {item.dynamicFields.doctor?(<View className='flex-row'>
-                          <DoctorIcon/>
-                          <Text className='font-light'>{item.dynamicFields.doctor}</Text>
-
-                        </View>):(<></>)}
-                    
-                  </View>
-                    <View className='flex-row p-4 justify-between'>
-                    <View className="flex-1 max-w-[60%]">
-                      
-                      
-        {Object.entries(item.dynamicFields).map(([key, value]) => {
-          if ( key === 'doctor') return null; 
-          
-          if (Array.isArray(value)) {
-            return (
-              <View key={key}>
-                <Text className="text-stone-900 font-bold text-lg">{key} :</Text>
-                {value.map((v, i) =>
-                  typeof v === 'object' ? (
-                    <View key={i}>
-                      <Text  className="text-stone-900 font-semibold">{`${v.label} `}</Text>
-                      <Text  className="text-gray-600 font-light">{`${v.value}`}</Text>
-                    </View>
-                    
-                  ) : (
-                    <Text key={i} className="text-gray-600 font-light">- {v}</Text>
-                  )
-                )}
-              </View>
-            );
-          }
-
-          return (
+                        
+          {Object.entries(item.dynamicFields).map(([key, value]) => {
+            if ( key === 'doctor') return null; 
             
-            <View key={key} className=''>
-              <Text  className="text-stone-900 font-bold text-lg ">{`${key} :`}</Text>
-              <Text  className="text-gray-600 font-light">{`${value}`}</Text>
-            </View>
-          );
-        })}
-                    </View>
-
-                    <View  className="items-right ml-1 bg-gray-200 rounded-lg">
+            if (Array.isArray(value)) {
+              return (
+                <View key={key}>
+                  <Text className="text-stone-900 font-bold text-lg">{key} :</Text>
+                  {value.map((v, i) =>
+                    typeof v === 'object' ? (
+                      <View key={i}>
+                        <Text  className="text-stone-900 font-semibold">{`${v.label} `}</Text>
+                        <Text  className="text-gray-600 font-light">{`${v.value}`}</Text>
+                      </View>
                       
-                      
-                                  <Image 
-              source={{ uri: item.thumbnail }} 
-              style={{ width: 150, height: 150 }} 
-              alt={item.title}
-              />
-                    <TouchableOpacity className="mt-4" onPress={()=>{downloadFile(item._id)}}>
-                      <Text className="text-blue-500 text-center font-bold text-m">View Report</Text>
-                    </TouchableOpacity>
-                    </View>
-                    </View>
-                  </View>
+                    ) : (
+                      <Text key={i} className="text-gray-600 font-light">- {v}</Text>
+                    )
+                  )}
                 </View>
               );
-            })}
-          </View>
-        ))}
-      </ScrollView>
+            }
+  
+            return (
+              
+              <View key={key} className=''>
+                <Text  className="text-stone-900 font-bold text-lg ">{`${key} :`}</Text>
+                <Text  className="text-gray-600 font-light">{`${value}`}</Text>
+              </View>
+            );
+          })}
+                      </View>
+  
+                      <View  className="items-right ml-1 bg-gray-200 rounded-lg">
+                        
+                        
+                                    <Image 
+                source={{ uri: item.thumbnail }} 
+                style={{ width: 150, height: 150 }} 
+                alt={item.title}
+                />
+                      <TouchableOpacity className="mt-4" onPress={()=>{downloadFile(item._id)}}>
+                        <Text className="text-blue-500 text-center font-bold text-m">View Report</Text>
+                      </TouchableOpacity>
+                      </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>):(<></>)
+      }
+
+      {isLoading?(<Text className='h-[90%] text-center justify-center items-center'>Loading...</Text>):(<></>)}
     </View>
   );
 }

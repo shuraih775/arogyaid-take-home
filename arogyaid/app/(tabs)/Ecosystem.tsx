@@ -1,10 +1,10 @@
 import React from 'react'
-import {View} from 'react-native';
+import {View,Text} from 'react-native';
 
 function Ecosystem() {
   return (
-    <View>
-      
+    <View className='h-[100%] justify-center text-center items-center'>
+      <Text className='text-center'> This is the Ecosystem Screen.</Text>
     </View>
   )
 }

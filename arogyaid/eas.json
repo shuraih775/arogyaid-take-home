@@ -1,0 +1,14 @@
+{
+  "cli": {
+    "version": ">= 10.0.3"
+
+  },
+  "build": {
+    "production": {
+      "distribution": "store",
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
