@@ -295,7 +295,7 @@ export default function MedicalRecordsScreen() {
   const fetchRecords = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get('http://192.168.0.109:3000/records');
+      const response = await axios.get('https://arogyaid-take-home.onrender.com/records');
       const processedRecords = processRecords(response.data);
       setRecords(processedRecords.processedRecords);
       setFilteredRecords(processedRecords.processedRecords);
@@ -340,7 +340,7 @@ export default function MedicalRecordsScreen() {
       setShowUploadModal(false);
 
       setShowProgress(true);
-      const response = await axios.post("http://192.168.0.109:3000/records/upload", formData, {
+      const response = await axios.post("https://arogyaid-take-home.onrender.com/records/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -500,7 +500,7 @@ export default function MedicalRecordsScreen() {
       const fileExtension = fileType.split('/')[1];
       const fileUri = `${FileSystem.documentDirectory}${recordId}.${fileExtension}`;
   
-      const response = await axios.get(`http://192.168.0.109:3000/records/${recordId}/download`, {
+      const response = await axios.get(`https://arogyaid-take-home.onrender.com/records/${recordId}/download`, {
         responseType: 'blob',
       });
   
@@ -547,7 +547,7 @@ export default function MedicalRecordsScreen() {
     try {
       setShowUploadModal(false);
       setShowProgress(true);
-      const response = await axios.post("http://192.168.0.109:3000/records/upload", formData, {
+      const response = await axios.post("https://arogyaid-take-home.onrender.com/records/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
