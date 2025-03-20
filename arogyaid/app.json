@@ -9,13 +9,29 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to your camera.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "data": [
+            { "mimeType": "text/plain" },
+            { "mimeType": "image/*" },
+            { "mimeType": "application/pdf" },
+            { "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }
+          ],
+          "category": ["android.intent.category.DEFAULT"]
+        }
+      ],
       "package": "com.shuraih.arogyaid"
     },
     "web": {

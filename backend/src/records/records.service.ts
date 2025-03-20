@@ -4,6 +4,13 @@ import { Model } from 'mongoose';
 import { MedicalRecord, MedicalRecordDocument } from './schemas/record.schema';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as Tesseract from 'tesseract.js';
+const pdfParse = require('pdf-parse');
+import * as mammoth from 'mammoth';
+import { PDFDocument,rgb } from 'pdf-lib';
+import * as sharp from 'sharp';
+
+const nodeHtmlToImage = require('node-html-to-image').default;
 
 
 @Injectable()
@@ -23,6 +30,95 @@ export class RecordsService {
     return record;
   }
 
+  async processFile(file: Express.Multer.File, body: any): Promise<MedicalRecord> {
+    let extractedText = '';
+    let thumbnail: Buffer | null = null;
+
+
+    if (file.mimetype === 'application/pdf') {
+      extractedText = await this.extractTextFromPDF(file.path);
+      thumbnail = await this.generateThumbnailFromPDF(file.path);
+    
+
+    } else if (
+      file.mimetype === 'application/msword' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      extractedText = await this.extractTextFromDocx(file.path);
+      thumbnail = await this.generateThumbnailFromDocx(file.path);
+    } else if (
+      file.mimetype.startsWith("image/")
+    ){
+      extractedText = await this.extractTextFromImage(file.path);
+      thumbnail = await fs.readFileSync(file.path);
+    }
+
+
+    const newRecord = new this.recordModel({
+      title: body.title || file.originalname,
+      type: body.type || 'Report',
+      date: new Date().toISOString(),
+      fileType:file.mimetype,
+      dynamicFields: {
+        extractedText: extractedText.substring(0, 1000),
+      },
+      file: fs.readFileSync(file.path),
+      thumbnail: thumbnail,
+    });
+
+    await newRecord.save();
+    return newRecord;
+  }
+
+  private async generateThumbnailFromPDF(filePath: string): Promise<Buffer | null> {
+    try {
+      const { pdf } = await import("pdf-to-img");
+      const document = await pdf(filePath, { scale: 3 });
+
+      const pageBuffer = await document.getPage(1);
+      return pageBuffer ?? null
+
+    } catch (error) {
+      console.error('Error extracting thumbnail from PDF:', error);
+      return null;
+    }
+  }
+
+  private async generateThumbnailFromDocx(filePath: string): Promise<Buffer | null> {
+    try {
+      const { value: extractedText } = await mammoth.extractRawText({ path: filePath });
+      const previewText = extractedText.split('\n').slice(0, 5).join('\n'); 
+  
+      const imageBuffer = await nodeHtmlToImage({
+        html: `<div style="width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; 
+               background: #f0f0f0; font-size: 14px; text-align: center; padding: 10px;"> 
+                 ${previewText} 
+               </div>`,
+        type: 'jpeg',
+        quality: 80,
+      });
+  
+      return imageBuffer as Buffer;
+    } catch (error) {
+      console.error('Error extracting thumbnail from DOCX:', error);
+      return null;
+    }
+  }
+  
+  private async extractTextFromImage(filePath: string): Promise<string> {
+    const { data } = await Tesseract.recognize(filePath, 'eng'); // English Language
+    return data.text;
+  }
+  
+  private async extractTextFromPDF(filePath: string): Promise<string> {
+    const data = await pdfParse(fs.readFileSync(filePath));
+    return data.text;
+  }
+
+  private async extractTextFromDocx(filePath: string): Promise<string> {
+    const data = await mammoth.extractRawText({ path: filePath });
+    return data.value;
+  }
   async createData(): Promise<MedicalRecord[]> {
     const pdfPath = path.join(process.cwd(), 'med_report.pdf');
     const thumbnailPath = path.join(process.cwd(), 'thumbnail.jpg');

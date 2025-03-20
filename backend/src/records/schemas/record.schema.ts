@@ -20,6 +20,9 @@ export class MedicalRecord {
   @Prop({ type: Buffer })
   file: Buffer;
 
+  @Prop({ type: String })
+  fileType: string;
+
   @Prop({ type: Buffer })
   thumbnail: Buffer;
 }

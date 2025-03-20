@@ -1,5 +1,12 @@
-import { useState,useEffect } from 'react';
-import { ScrollView, View, Text, Image, TouchableOpacity, TextInput,Dimensions,Platform } from 'react-native';
+import { useState,useEffect, useRef } from 'react';
+import { ScrollView,RefreshControl, View, Text, Image, TouchableOpacity, TextInput, Dimensions, ActivityIndicator,Linking, Animated } from 'react-native';
+import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+
+import { Button, ProgressBar } from "react-native-paper";
 import QrIcon from '../../assets/images/qrIcon';
 import BellIcon from '../../assets/images/bellIcon';
 import MicIcon from '../../assets/images/micIcon';
@@ -9,11 +16,14 @@ import OptionsIcon from '../../assets/images/optionsIcon';
 import DoctorIcon from '../../assets/images/doctorIcon';
 import MedicalIcon from '../../assets/images/medicalIcon';
 import DownwardArrowIcon from '../../assets/images/downwardArrow';
-import axios from 'axios';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import CloudIcon from '../../assets/images/cloudIcon';
+import CameraIcon from '../../assets/images/cameraIcon';
+import WhatsappIcon from '../../assets/images/whatsappIcon';
+import GmailIcon from '../../assets/images/gmailIcon';
+import XIcon from '../../assets/images/XIcon';
 
 
+const MAX_HEIGHT = 230;
 const screenWidth = Dimensions.get("window").width;
 
 const categoryIcons = {
@@ -33,16 +43,42 @@ const categoryColors = {
   "Pathology": "#6A5ACD", // Slate Blue
   "Procedure": "#20B2AA", // Light Sea Green
   "Hospitalization": "#FFA500", // Orange
+  "Report": "#00FFFF"
 };
+
+const processDate = (record: any): [string, string] => {
+  let date: string;
+  let year: string;
+
+  [date,year] = record.date.split(', ');
+
+  if (typeof record.date === 'string' && (!year || !date)) {
+    const parsedDate = new Date(record.date);
+    
+    year = parsedDate.getFullYear().toString();
+    
+    
+    date = parsedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } 
+  
+
+  return [date, year];
+};
+
+
 
 const processRecords = (records) => {
   const processedRecords = [];
   const uniqueDoctors = new Set();
   const uniqueTypes = new Set();
   const uniqueDiseases = new Set();
+  const ids = new Set();
 
   records.forEach((record) => {
-    const [date, year] = record.date.split(', ');
+    ids.add(records._id);
+
+    const [date, year] = processDate(record);
+    
     const formattedRecord = { ...record, date };
 
     const yearGroup = processedRecords.find((group) => group.year === year);
@@ -65,6 +101,7 @@ const processRecords = (records) => {
         uniqueDiseases.add(disease)
       );
     }
+    
   });
 
   return {
@@ -72,6 +109,7 @@ const processRecords = (records) => {
     uniqueDoctors: Array.from(uniqueDoctors),
     uniqueTypes: Array.from(uniqueTypes),
     uniqueDiseases: Array.from(uniqueDiseases),
+    ids
   };
 };
 
@@ -109,6 +147,109 @@ const processRecords = (records) => {
 //   },
 // ];
 
+const RecordCard = ({ item, expandedIds, toggleExpand }) => {
+  const Icon = categoryIcons[item.type];
+  const color = categoryColors[item.type]
+  const isExpanded = expandedIds.includes(item._id);
+  const animatedHeight = useRef(new Animated.Value(MAX_HEIGHT)).current;
+  
+
+  const expandOrCollapse = () => {
+    Animated.timing(animatedHeight, {
+      toValue: isExpanded ? MAX_HEIGHT : 500,
+      duration: 300,
+      useNativeDriver: false,
+    }).start(() => toggleExpand(item._id));
+  };
+
+  return (
+    <View key={item._id} className="mt-4 rounded-xl">
+      <Text className="text-gray-500 mb-2 bg-white p-2">{item.date}</Text>
+
+      <View className="justify-between bg-white shadow-lg shadow-gray-400 rounded-xl">
+        {/* Header */}
+        <View className='flex-row justify-between'>
+                    <View className='pl-0 pt-3 border-b border-stone-200 ml-4'>
+                    <Text className="text-lg font-semibold mb-1 text-left">{item.title}</Text>
+                    </View>
+                    <View style= {{backgroundColor:`${color}`}} className='rounded-bl-xl rounded-tr-xl flex-row p-2'>
+                        {Icon && <Icon />}
+                        <Text className="text-lg font-semibold mb-1 ml-2">{item.type}</Text>
+                          <TouchableOpacity>
+                          <OptionsIcon/>
+                          </TouchableOpacity>
+                        </View>
+                    </View>
+  
+                    <View className='flex-row justify-between p-2 pl-0 ml-4'>
+                    
+                    <View className='flex-row '>
+                    <MedicalIcon/>
+                      <Text className='font-light'>Lorem ipsum dolor sit.</Text>
+                      </View>
+                          
+                          {item.dynamicFields.doctor?(<View className='flex-row'>
+                            <DoctorIcon/>
+                            <Text className='font-light'>{item.dynamicFields.doctor}</Text>
+  
+                          </View>):(<></>)}
+                      
+                    </View>
+
+        
+
+        <Animated.View style={{ overflow: "hidden", height: animatedHeight }}>
+          <View className="flex-row p-4 justify-between">
+            <View className="flex-1 max-w-[60%]">
+              {Object.entries(item.dynamicFields).map(([key, value]) => {
+                if (key === "doctor") return null;
+
+                if (Array.isArray(value)) {
+                  return (
+                    <View key={key}>
+                      <Text className="text-stone-900 font-bold text-lg">{key} :</Text>
+                      {value.map((v, i) =>
+                        typeof v === "object" ? (
+                          <View key={i}>
+                            <Text className="text-stone-900 font-semibold">{`${v.label} `}</Text>
+                            <Text className="text-gray-600 font-light">{`${v.value}`}</Text>
+                          </View>
+                        ) : (
+                          <Text key={i} className="text-gray-600 font-light">- {v}</Text>
+                        )
+                      )}
+                    </View>
+                  );
+                }
+
+                return (
+                  <View key={key}>
+                    <Text className="text-stone-900 font-bold text-lg">{`${key} :`}</Text>
+                    <Text className="text-gray-600 font-light">{`${value}`}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View className="bg-gray-200 rounded-lg p-2 self-start">
+              <Image source={{ uri: item.thumbnail }} style={{ width: 150, height: 150 }} alt={item.title} />
+              <TouchableOpacity className="mt-4" onPress={() => downloadFile(item._id, item.fileType)}>
+                <Text className="text-blue-500 text-center font-bold text-m">View Report</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+
+
+        
+
+        <TouchableOpacity  onPress={expandOrCollapse} className="p-2">
+          <Text className="text-blue-500 text-center font-bold">{isExpanded ? "View Less" : "View More"}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
 
 export default function MedicalRecordsScreen() {
   const [searchText, setSearchText] = useState('');
@@ -124,6 +265,24 @@ export default function MedicalRecordsScreen() {
   const [currentKey, setCurrentkey] = useState(false);
   const [currentVal, setCurrentVal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [ids,setIds] = useState([]);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prevIds) =>
+      prevIds.includes(id) ? prevIds.filter((recordId) => recordId !== id) : [...prevIds, id]
+    );
+  };
+
+
+  
 
   
 
@@ -133,28 +292,86 @@ export default function MedicalRecordsScreen() {
     "Diseases": diseases
   }
   
-
+  const fetchRecords = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get('http://192.168.0.109:3000/records');
+      const processedRecords = processRecords(response.data);
+      setRecords(processedRecords.processedRecords);
+      setFilteredRecords(processedRecords.processedRecords);
+      setDoctors(processedRecords.uniqueDoctors);
+      setRecordTypes(processedRecords.uniqueTypes);
+      setDiseases(processedRecords.uniqueDiseases);
+      setIds(processedRecords.ids);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   useEffect(()=>{
-    const fetchRecords = async () => {
-      setIsLoading(true);
-      try {
-        const response = await axios.get('https://arogyaid-take-home.onrender.com/records');
-        const processedRecords = processRecords(response.data);
-        setRecords(processedRecords.processedRecords);
-        setFilteredRecords(processedRecords.processedRecords);
-        setDoctors(processedRecords.uniqueDoctors);
-        setRecordTypes(processedRecords.uniqueTypes);
-        setDiseases(processedRecords.uniqueDiseases);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    
   
     fetchRecords();
 
   },[])
+
+
+  useEffect(() => {
+    if (file) {
+      uploadFile();
+    }
+  }, [file]);
+
+  const uploadImageFromCamera = async () =>{
+    if (!image) {
+      alert("Please select a image first!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri: image,
+      name: `image_${Date.now()}.jpg`, 
+      type: "image/jpeg",
+    } as any);
+
+    try {
+      setShowUploadModal(false);
+
+      setShowProgress(true);
+      const response = await axios.post("http://192.168.0.109:3000/records/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const uploadProgress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          setProgress(uploadProgress);
+        },
+      });
+
+      alert("Image uploaded successfully!");
+    } catch (error) {
+      console.error(error);
+      alert("Upload failed!");
+    } finally {
+      setShowProgress(false);
+      setImage(null);
+
+    }
+  } 
+  useEffect(()=>{
+    if(image){
+      uploadImageFromCamera();
+    }
+  
+  },[image])
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+   await  fetchRecords();
+    setRefreshing(false);
+  }
 
   const updateFilters = (key,value) =>{
     if (key === 'Doctors'){
@@ -204,7 +421,35 @@ export default function MedicalRecordsScreen() {
   };
   
   
+  const openWhatsApp = () => {
+    Linking.openURL("whatsapp://send").catch(() => {
+      alert("WhatsApp is not installed!");
+    });
+  };
   
+  
+  const openMail = () => {
+    Linking.openURL("mailto:").catch(() => {
+      alert("No mail app found!");
+    });
+  };
+
+  const takePicture = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      alert("Permission to access camera is required!");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
   
   
 
@@ -250,11 +495,12 @@ export default function MedicalRecordsScreen() {
     
   }
   
-  const downloadFile = async (recordId: string) => {
+  const downloadFile = async (recordId: string, fileType: string) => {
     try {
-      const fileUri = `${FileSystem.documentDirectory}${recordId}.pdf`;
+      const fileExtension = fileType.split('/')[1];
+      const fileUri = `${FileSystem.documentDirectory}${recordId}.${fileExtension}`;
   
-      const response = await axios.get(`https://arogyaid-take-home.onrender.com/records/${recordId}/download`, {
+      const response = await axios.get(`http://192.168.0.109:3000/records/${recordId}/download`, {
         responseType: 'blob',
       });
   
@@ -263,8 +509,9 @@ export default function MedicalRecordsScreen() {
       await FileSystem.writeAsStringAsync(fileUri, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
+
   
-      if (await Sharing.isAvailableAsync()) {
+     if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri);
       } else {
         console.log('File saved at:', fileUri);
@@ -273,6 +520,7 @@ export default function MedicalRecordsScreen() {
       console.error('Error downloading file:', error);
     }
   };
+  
   
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -283,11 +531,140 @@ export default function MedicalRecordsScreen() {
     });
   };
 
+  const uploadFile = async () => {
+    if (!file) {
+      alert("Please select a file first!");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    } as any);
+
+    try {
+      setShowUploadModal(false);
+      setShowProgress(true);
+      const response = await axios.post("http://192.168.0.109:3000/records/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const uploadProgress = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          setProgress(uploadProgress);
+        },
+      });
+
+      alert("File uploaded successfully!");
+    } catch (error) {
+      console.error(error);
+      alert("Upload failed!");
+    } finally {
+      setShowProgress(false);
+      setFile(null);
+      
+
+    }
+  };
+
+  
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: [
+        "image/*", 
+        "application/pdf", 
+        "application/msword", 
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+      ],
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) return;
+    setFile(result.assets[0]);
+    
+    
+  };
+
+
+
   return (
     <View className="flex-1 bg-white pt-4">
+      
+      {showUploadModal && (
+  <View className="absolute z-50 top-2 left-0 w-full h-full bg-black/30 backdrop-blur-md flex justify-center items-center" >
+    <View className="flex flex-wrap flex-row justify-center gap-4 p-6 rounded-2xl shadow-lg">
+      
+      <TouchableOpacity className="bg-stone-700 rounded-2xl p-4 w-40 h-48 flex justify-center" onPress={pickFile}>
+        <Text className="text-left text-lg text-gray-200 font-semibold ">Upload</Text>
+        
+          <Text className="text-gray-200  font-light text-left mb-6">from device</Text>
+
+          <View className='rounded-full w-16 h-16 items-center justify-center bg-white/30 backdrop-blur-md   border border-gray-200'>
+          <View className='rounded-full w-12 h-12 bg-blue-500 items-center justify-center'>
+            <CloudIcon/>
+          </View>
+          </View>
+        
+      </TouchableOpacity>
+
+      <TouchableOpacity className="bg-stone-700 rounded-2xl p-4 w-40 h-48 flex justify-center " onPress={takePicture}>
+        <Text className="text-left text-lg text-gray-200 font-semibold">Take</Text>
+        
+          <Text className=" text-left font-light text-gray-200 mb-6">a photo</Text>
+          <View className='rounded-full w-16 h-16 items-center justify-center bg-white/30 backdrop-blur-md   border border-gray-200'>
+          <View className='rounded-full w-12 h-12 bg-blue-500 items-center justify-center'>
+            <CameraIcon/>
+          </View>
+          </View>
+          
+        
+      </TouchableOpacity>
+
+      <TouchableOpacity className="bg-stone-700 rounded-2xl p-4 w-40 h-48 flex justify-center " onPress={()=>{openWhatsApp()}}>
+        <Text className="text-left text-lg text-gray-200 font-semibold">Upload</Text>
+        
+          <Text className=" text-left  font-light text-gray-200 mb-6">with whatsapp</Text>
+
+          <View className='rounded-full w-16 h-16 items-center justify-center bg-white/30 backdrop-blur-md   border border-gray-200'>
+         
+            <WhatsappIcon/>
+          
+          </View>
+        
+      </TouchableOpacity>
+
+      <TouchableOpacity className="bg-stone-700 rounded-2xl p-4 w-40 h-48 flex justify-center " onPress={()=>{openMail()}}>
+        <Text className="text-left text-lg text-gray-200 font-semibold">Upload</Text>
+        
+          <Text className=" text-left font-light text-gray-200 mb-6">from gmail</Text>
+
+          <View className='rounded-full w-16 h-16 items-center justify-center bg-white/30 backdrop-blur-md   border border-gray-200'>
+          
+            <GmailIcon/>
+          
+          </View>
+      
+      </TouchableOpacity>
+
+    </View>
+
+        <TouchableOpacity className='rounded-full w-12 h-12 items-center justify-center bg-black/30 backdrop-blur-md' onPress={()=>{setShowUploadModal(false)}}><XIcon/></TouchableOpacity>
+  </View>
+)}
+
+{showProgress && (
+        <View  className='absolute z-50 top-2 left-0 w-full h-full bg-white/30 backdrop-blur-md flex justify-center items-center'>
+          <Text style={{ textAlign: "center", marginBottom: 5 }}>{Math.round(progress)}% uploaded</Text>
+          <ProgressBar progress={progress} color="#6200ea" />
+          <ActivityIndicator animating={true} color="#6200ea" style={{ marginTop: 10 }} />
+        </View>
+      )}
+
 
       <View className="flex-row justify-between pl-4 pr-4">
-        <TouchableOpacity className="items-center justify-center">
+        <TouchableOpacity className="items-center justify-center" onPress={()=>{setShowUploadModal(true)}}>
           <QrIcon />
         </TouchableOpacity>
 
@@ -314,9 +691,9 @@ export default function MedicalRecordsScreen() {
         </TouchableOpacity>
       </View>
 
-    <View className='my-4 mx-2'>
+    {/* <View className='my-4 mx-2'>
     <View className="flex-row justify-between  p-1">
-  {/* {Object.entries(dropDownData).map(([key, value]) => (
+  {Object.entries(dropDownData).map(([key, value]) => (
     <TouchableOpacity
       key={key}
       className="rounded-full flex-row items-center border border-black p-4"
@@ -331,7 +708,7 @@ export default function MedicalRecordsScreen() {
       
       <DownwardArrowIcon />
     </TouchableOpacity>
-  ))} */}
+  ))}
   
 </View>
 {
@@ -341,7 +718,7 @@ export default function MedicalRecordsScreen() {
     </TouchableOpacity>
   )
 }
-    </View>
+    </View> */}
 
       {showFilter && renderDropdown()}
 
@@ -350,7 +727,7 @@ export default function MedicalRecordsScreen() {
       </View>
 
       {
-        records.length>0?(<ScrollView className="px-4">
+        records.length>0?(<ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} className="px-4">
           {filteredRecords.map((record, index) => (
             <View key={index} className="mb-6 relative">
               <View className="absolute left-8 top-8 bg-blue-500 rounded-lg w-1 h-[90%] z-[-50]" />
@@ -360,93 +737,9 @@ export default function MedicalRecordsScreen() {
               </Text>
   
               {record.subRecords.map((item, subindex) => {
-                const Icon = categoryIcons[item.type];
-                const color = categoryColors[item.type]
+                
                 return (
-                  <View key={subindex} className="mt-4 rounded-xl">
-                    
-                    
-                    <Text className="text-gray-500 mb-2 bg-white p-2">{item.date}</Text>
-                    <View className="justify-between bg-white shadow-lg shadow-gray-400 rounded-xl  ">
-  
-                    <View className='flex-row justify-between'>
-                    <View className='pl-0 pt-3 border-b border-stone-200 ml-4'>
-                    <Text className="text-lg font-semibold mb-1 text-left">{item.title}</Text>
-                    </View>
-                    <View style= {{backgroundColor:`${color}`}} className='rounded-bl-xl rounded-tr-xl flex-row p-2'>
-                        {Icon && <Icon />}
-                        <Text className="text-lg font-semibold mb-1 ml-2">{item.type}</Text>
-                          <TouchableOpacity>
-                          <OptionsIcon/>
-                          </TouchableOpacity>
-                        </View>
-                    </View>
-  
-                    <View className='flex-row justify-between p-2 pl-0 ml-4'>
-                    
-                    <View className='flex-row '>
-                    <MedicalIcon/>
-                      <Text className='font-light'>Lorem ipsum dolor sit.</Text>
-                      </View>
-                          
-                          {item.dynamicFields.doctor?(<View className='flex-row'>
-                            <DoctorIcon/>
-                            <Text className='font-light'>{item.dynamicFields.doctor}</Text>
-  
-                          </View>):(<></>)}
-                      
-                    </View>
-                      <View className='flex-row p-4 justify-between'>
-                      <View className="flex-1 max-w-[60%]">
-                        
-                        
-          {Object.entries(item.dynamicFields).map(([key, value]) => {
-            if ( key === 'doctor') return null; 
-            
-            if (Array.isArray(value)) {
-              return (
-                <View key={key}>
-                  <Text className="text-stone-900 font-bold text-lg">{key} :</Text>
-                  {value.map((v, i) =>
-                    typeof v === 'object' ? (
-                      <View key={i}>
-                        <Text  className="text-stone-900 font-semibold">{`${v.label} `}</Text>
-                        <Text  className="text-gray-600 font-light">{`${v.value}`}</Text>
-                      </View>
-                      
-                    ) : (
-                      <Text key={i} className="text-gray-600 font-light">- {v}</Text>
-                    )
-                  )}
-                </View>
-              );
-            }
-  
-            return (
-              
-              <View key={key} className=''>
-                <Text  className="text-stone-900 font-bold text-lg ">{`${key} :`}</Text>
-                <Text  className="text-gray-600 font-light">{`${value}`}</Text>
-              </View>
-            );
-          })}
-                      </View>
-  
-                      <View  className="items-right ml-1 bg-gray-200 rounded-lg">
-                        
-                        
-                                    <Image 
-                source={{ uri: item.thumbnail }} 
-                style={{ width: 150, height: 150 }} 
-                alt={item.title}
-                />
-                      <TouchableOpacity className="mt-4" onPress={()=>{downloadFile(item._id)}}>
-                        <Text className="text-blue-500 text-center font-bold text-m">View Report</Text>
-                      </TouchableOpacity>
-                      </View>
-                      </View>
-                    </View>
-                  </View>
+                  <RecordCard key={item._id} item={item} expandedIds={expandedIds} toggleExpand={toggleExpand} />
                 );
               })}
             </View>

@@ -1,8 +1,12 @@
-import { Controller, Get, Post, Param, Res, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Res, NotFoundException, UploadedFile, UseInterceptors, Body } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { RecordsService } from './records.service';
 import { MedicalRecord } from './schemas/record.schema';
 import { MedicalRecordResponse } from './dto/medical-record-response.dto';
 import { Response } from 'express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { Express } from 'express'; 
 
 @Controller('records')
 export class RecordsController {
@@ -24,6 +28,24 @@ async getAllRecords(): Promise<MedicalRecordResponse[]> {
   @Post('createData')
   async createData() {
     return this.recordsService.createData();
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, callback) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        callback(null, file.fieldname + '-' + uniqueSuffix + extname(file.originalname));
+      }
+    }),
+  }))
+  async uploadFile(@UploadedFile() file: Express.Multer.File, @Body() body) {
+    if (!file) {
+      throw new NotFoundException('No file uploaded');
+    }
+
+    return this.recordsService.processFile(file, body);
   }
 
   @Get(':id/download')
